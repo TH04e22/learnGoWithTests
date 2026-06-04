@@ -1,8 +1,10 @@
 package blogrenderer
 
 import (
-	"fmt"
+	"embed"
+	"html/template"
 	"io"
+	"strings"
 )
 
 type Post struct {
@@ -10,28 +12,32 @@ type Post struct {
 	Tags                     []string
 }
 
-func Render(w io.Writer, p Post) error {
-	_, err := fmt.Fprintf(w, "<h1>%s</h1>\n<p>%s</p>\n", p.Title, p.Description)
+func (p Post) SanitisedTitle() string {
+	return strings.ToLower(strings.Replace(p.Title, " ", "-", -1))
+}
+
+var (
+	//go:embed "templates/*"
+	postTemplate embed.FS
+)
+
+type PostRenderer struct {
+	templ *template.Template
+}
+
+func NewPostRenderer() (*PostRenderer, error) {
+	templ, err := template.ParseFS(postTemplate, "templates/*.gohtml")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = fmt.Fprint(w, "Tags: <ul>")
-	if err != nil {
-		return err
-	}
+	return &PostRenderer{templ: templ}, nil
+}
 
-	for _, tag := range p.Tags {
-		_, err = fmt.Fprintf(w, "<li>%s</li>", tag)
-		if err != nil {
-			return err
-		}
-	}
+func (r *PostRenderer) Render(w io.Writer, p Post) error {
+	return r.templ.ExecuteTemplate(w, "blog.gohtml", p)
+}
 
-	_, err = fmt.Fprint(w, "</ul>")
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (r *PostRenderer) RenderIndex(w io.Writer, posts []Post) error {
+	return r.templ.ExecuteTemplate(w, "index.gohtml", posts)
 }
